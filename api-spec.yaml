@@ -1,0 +1,1903 @@
+openapi: 3.0.3
+info:
+  title: Portal API
+  description: API specification for the Portal backend
+  version: 1.0.0
+
+servers:
+  - url: /
+    description: Base URL (prefix with your host)
+
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Health
+    description: Health check
+  - name: Users
+    description: User management
+  - name: Requests
+    description: Request/workflow management
+  - name: Entities
+    description: Entity catalog
+  - name: Steps
+    description: Step action types
+  - name: Workflows
+    description: Workflow templates
+  - name: Action Logs
+    description: User action history
+  - name: Participants
+    description: Request participant management
+  - name: Forms
+    description: Form template management (opaque JSON payload)
+  - name: Comments
+    description: Comment threads on requests
+
+paths:
+  # =============================================================================
+  # Auth (mounted at /auth, not /api)
+  # =============================================================================
+  /auth/login:
+    get:
+      tags: [Auth]
+      summary: Initiate Microsoft OAuth login
+      description: Redirects user to Microsoft for authentication
+      responses:
+        '302':
+          description: Redirect to Microsoft login page
+
+  /auth/callback:
+    get:
+      tags: [Auth]
+      summary: OAuth callback
+      description: Microsoft redirects here after login. Returns tokens and profile.
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    example: "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9..."
+                  refreshToken:
+                    type: string
+                  profile:
+                    type: object
+        '302':
+          description: Redirect to /auth/failure on error
+
+  /auth/failure:
+    get:
+      tags: [Auth]
+      summary: OAuth failure
+      responses:
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Authentication failed"
+
+  # =============================================================================
+  # API (mounted at /api)
+  # =============================================================================
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: API login / user upsert
+      description: |
+        For API clients with Bearer token. Creates or updates the current user record
+        from the authenticated identity (e.g. Microsoft profile). Call after OAuth
+        to persist the user in the database.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User created or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleUserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api:
+    get:
+      tags: [Health]
+      summary: API version info
+      responses:
+        '200':
+          description: Current commit info (or nulls when git metadata is unavailable)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commit:
+                    type: string
+                    nullable: true
+                    description: Short (7-character) git commit hash
+                    example: "4ee63fc"
+                  committedAt:
+                    type: string
+                    nullable: true
+                    description: Human-readable time since commit (recomputed on each request)
+                    example: "2 hours ago"
+
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2025-02-13T12:00:00.000Z"
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List users
+      security: []
+      responses:
+        '200':
+          description: Paginated list of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserResponse'
+
+  /api/users/me:
+    get:
+      tags: [Users]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleUserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/entities:
+    get:
+      tags: [Entities]
+      summary: List entities
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/After'
+      responses:
+        '200':
+          description: Paginated list of entities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEntityResponse'
+
+  /api/steps/types:
+    get:
+      tags: [Steps]
+      summary: List step action types
+      description: Valid values for step `actionType` when creating requests with steps.
+      responses:
+        '200':
+          description: Array of step action type strings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  enum: [SIGN, APPROVE, REVIEW]
+              example: ["SIGN", "APPROVE", "REVIEW"]
+
+  /api/steps/approval-modes:
+    get:
+      tags: [Steps]
+      summary: List step approval modes
+      description: Valid values for step `approvalMode` when creating requests with steps (e.g. ANY = one approver, ALL = all required).
+      responses:
+        '200':
+          description: Array of approval mode strings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  enum: [ANY, ALL]
+              example: ["ANY", "ALL"]
+
+  /api/workflows:
+    get:
+      tags: [Workflows]
+      summary: List workflows
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/After'
+      responses:
+        '200':
+          description: Paginated list of workflows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedWorkflowResponse'
+
+  /api/requests:
+    get:
+      tags: [Requests]
+      summary: List all requests (user has access to)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/After'
+      responses:
+        '200':
+          description: Paginated list of requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRequestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Requests]
+      summary: Create request
+      description: |
+        Creates a new request. **workflowId** and **entityId** are required (every request belongs to a workflow and an entity).
+        When status is SUBMITTED, the server assigns a request number using `{company}-{requestType}-{YYMM}{sequence}`.
+        Sequence is tracked per workflow (request type) and per YYMM period, based on request `createdAt` (or `requestedAt` for backfill).
+        Attachments: use the collection name as the form field name (e.g. `invoices`, `receipts`). Each field accepts multiple files.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateRequestInput'
+      responses:
+        '200':
+          description: Request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleRequestResponse'
+        '400':
+          description: Bad request (e.g. missing workflowId or entityId)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/requests/me:
+    get:
+      tags: [Requests]
+      summary: List current user's requests
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/After'
+      responses:
+        '200':
+          description: Paginated list of user's requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRequestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/requests/{id}:
+    get:
+      tags: [Requests]
+      summary: Get request by ID
+      description: Supports request ID (UUID) or request number for lookup.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Request details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleRequestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Requests]
+      summary: Update request (DRAFT only)
+      description: |
+        Accepts multipart/form-data. File fields use the collection name as the field name (e.g. `invoices`, `receipts`).
+        Only the collections included in the upload are replaced; other collections are left untouched.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpdateRequestInput'
+      responses:
+        '200':
+          description: Request updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleRequestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [Requests]
+      summary: Soft delete request
+      description: |
+        Soft-deletes the request by setting deletedAt. Only the request creator can delete.
+        After deletion, the request is excluded from list and get (returns 404). No request body.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '204':
+          description: Request soft-deleted (no body)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden (only the creator can delete)
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/requests/{id}/steps:
+    get:
+      tags: [Requests]
+      summary: List request steps with tasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: List of steps with nested tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Step'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/requests/{id}/submit:
+    post:
+      tags: [Requests]
+      summary: Submit draft request
+      description: |
+        Assigns a request number and sets status to SUBMITTED.
+        Number format is `{company}-{requestType}-{YYMM}{sequence}` and uses `requestedAt` month when set (backfill), otherwise `createdAt` month.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Request submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleRequestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/requests/{id}/cancel:
+    post:
+      tags: [Requests]
+      summary: Cancel request
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Request cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleRequestResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/requests/{id}/action-task:
+    post:
+      tags: [Requests]
+      summary: Approve or reject request (as assigned approver)
+      description: |
+        Performs an action (approve or reject) on the current user's active task for this request.
+        Requires the user to be assigned to an ACTIVE task.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [APPROVED, REJECTED]
+                comment:
+                  type: string
+                  description: Required when status is REJECTED
+      responses:
+        '200':
+          description: Task approved or rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleTaskResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/requests/{id}/preview:
+    get:
+      tags: [Requests]
+      summary: Get request summary preview URLs
+      description: Returns signed URLs for the request summary PDF. Request must be fully approved.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Summary media with signed preview URLs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Request not yet fully approved
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/requests/{id}/media:
+    get:
+      tags: [Requests]
+      summary: List request attachments
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: List of media for the request
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MediaItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/requests/{id}/participants:
+    post:
+      tags: [Participants]
+      summary: Add participants to a request
+      description: |
+        Adds (or updates) one or more participants on a request. Request ID is in the path.
+        Only VIEW permission is supported. Requires request creator or an active participant
+        with EDIT permission on the request. Can add multiple participants per call.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Request ID (UUID) or request number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [participants]
+              properties:
+                participants:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                    format: uuid
+                  description: User IDs to add as participants (VIEW permission only)
+            example:
+              participants: ["550e8400-e29b-41d4-a716-446655440000", "6ba7b810-9dad-11d1-80b4-00c04fd430c8"]
+      responses:
+        '200':
+          description: Participants created or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParticipantListResponse'
+        '400':
+          description: Bad request (e.g. missing participants or request ID)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden (no permission to manage participants)
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [Participants]
+      summary: Remove one participant from a request
+      description: |
+        Soft-deletes one participant (the given user) on the request. Request ID is in the path.
+        Requires request creator or an active participant with EDIT permission. One participant per call.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Request ID (UUID) or request number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                  description: User ID of the participant to remove
+            example:
+              userId: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '204':
+          description: Participant removed
+        '400':
+          description: Bad request (e.g. missing userId)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden (no permission to manage participants)
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/action-logs/types:
+    get:
+      tags: [Action Logs]
+      summary: List action log action types
+      description: Valid values for action type in action logs (e.g. for filtering or display).
+      responses:
+        '200':
+          description: Array of action type strings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  enum: [CREATE, UPDATE, DELETE, APPROVE, REJECT, CANCEL, SUBMIT, VIEW]
+              example: ["CREATE", "UPDATE", "DELETE", "APPROVE", "REJECT", "CANCEL", "SUBMIT", "VIEW"]
+
+  /api/action-logs/object-types:
+    get:
+      tags: [Action Logs]
+      summary: List action log object types
+      description: Valid object types that actions can be performed on (e.g. for filtering).
+      responses:
+        '200':
+          description: Array of object type strings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  enum: [request, task, user, workflow]
+              example: ["request", "task", "user", "workflow"]
+
+  /api/action-logs/me:
+    get:
+      tags: [Action Logs]
+      summary: List current user's action logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/After'
+      responses:
+        '200':
+          description: Paginated list of action logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedActionLogResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # =============================================================================
+  # Comments
+  # =============================================================================
+  /api/requests/{request}/comments:
+    get:
+      tags: [Comments]
+      summary: List comments for a request
+      description: Returns all live (non-deleted) comments for the given request, ordered by createdAt descending.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestParam'
+      responses:
+        '200':
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [Comments]
+      summary: Create a comment on a request
+      description: |
+        Creates a comment. Accepts multipart/form-data with optional file attachments.
+        - Per-comment limit: 3 files.
+        - Aggregate limit across the whole request: 20 files / 100 MB.
+        - Allowed on requests with status: SUBMITTED, PENDING, APPROVED, REJECTED.
+        - User must be the requester or an active participant.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestParam'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateCommentInput'
+      responses:
+        '201':
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleCommentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/comments/{comment}:
+    patch:
+      tags: [Comments]
+      summary: Update own comment
+      description: |
+        Author-only update. Accepts multipart/form-data.
+        Previous body and attachment list are saved as a revision snapshot.
+        - Per-comment attachment limit: 3 (after removes / before adds).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CommentId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpdateCommentInput'
+      responses:
+        '200':
+          description: Comment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleCommentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [Comments]
+      summary: Soft-delete own comment
+      description: Author-only. Sets deletedAt on the comment and its media rows.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CommentId'
+      responses:
+        '204':
+          description: Comment deleted (no body)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # =============================================================================
+  # Forms
+  # =============================================================================
+  /api/forms/{id}:
+    get:
+      tags: [Forms]
+      summary: Get form by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Form UUID
+      responses:
+        '200':
+          description: Form found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleFormResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden (missing api.forms.show permission)
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Forms]
+      summary: Update form
+      description: Partial update — only provided fields are changed. Cannot change morph (modelType/modelId).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Form UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFormInput'
+      responses:
+        '200':
+          description: Form updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleFormResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [Forms]
+      summary: Delete form
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Form UUID
+      responses:
+        '204':
+          description: Form deleted (no body)
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/forms:
+    get:
+      tags: [Forms]
+      summary: List all forms
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of all forms
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden (missing api.forms.index permission)
+
+    post:
+      tags: [Forms]
+      summary: Create form
+      description: Creates a form template linked to a formable entity (e.g. Workflow).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFormInput'
+      responses:
+        '201':
+          description: Form created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleFormResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/test:
+    post:
+      tags: [Requests]
+      summary: Test file upload (internal)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '200':
+          description: Test response
+        '400':
+          description: No files provided
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+      description: Page size
+    After:
+      name: after
+      in: query
+      schema:
+        type: string
+      description: Cursor for next page (opaque string from meta.nextCursor)
+    RequestId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Request ID (UUID) or request number
+    RequestParam:
+      name: request
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Request ID (UUID) or request number (used in nested comment routes)
+    CommentId:
+      name: comment
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Comment UUID
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden — authenticated but not authorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+
+  schemas:
+    # Generic wrapper
+    SuccessWrapper:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data: {}
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: false
+        errors: {}
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: false
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+    PreviewResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            object:
+              type: string
+              example: "media"
+            urls:
+              type: array
+              items:
+                type: string
+              description: Signed preview URLs
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/MediaItem'
+
+    MediaItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        mimeType:
+          type: string
+          nullable: true
+        size:
+          type: integer
+          nullable: true
+        url:
+          type: string
+          description: Signed URL for access
+
+    GroupedMedia:
+      description: |
+        Attachments grouped by collection name when populated (`{ "invoices": [...], "receipts": [...] }`),
+        or an empty array `[]` when the resource has no attachments.
+      oneOf:
+        - type: array
+          maxItems: 0
+          description: Empty — resource has no attachments
+        - type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/MediaItem'
+          description: Keys are collection names; values are arrays of file objects
+
+    PaginationMeta:
+      type: object
+      properties:
+        limit:
+          type: integer
+          example: 20
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for next page; use as ?after=
+        hasMore:
+          type: boolean
+
+    # User
+    User:
+      type: object
+      properties:
+        object:
+          type: string
+          example: "user"
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+
+    SingleUserResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/User'
+
+    PaginatedUserResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # Entity
+    Entity:
+      type: object
+      properties:
+        object:
+          type: string
+          example: "entity"
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        alias:
+          type: string
+          nullable: true
+
+    PaginatedEntityResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entity'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # Workflow
+    Workflow:
+      type: object
+      properties:
+        object:
+          type: string
+          example: "workflow"
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Alias for nameEn; kept for backward compatibility
+        nameEn:
+          type: string
+          description: English name
+        nameTh:
+          type: string
+          nullable: true
+          description: Thai name (null until filled in)
+        alias:
+          type: string
+        displayName:
+          type: string
+        forms:
+          type: array
+          items:
+            $ref: '#/components/schemas/Form'
+          description: Form templates linked to this workflow (modelType=Workflow)
+
+    PaginatedWorkflowResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Workflow'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # Step (nested in Request)
+    Step:
+      type: object
+      properties:
+        object:
+          type: string
+          example: "step"
+        id:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        stepOrder:
+          type: integer
+        name:
+          type: string
+        actionType:
+          type: string
+          enum: [SIGN, APPROVE, REVIEW]
+        approvalMode:
+          type: string
+          enum: [ANY, ALL]
+        minApprovals:
+          type: integer
+          nullable: true
+        status:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    # Participant (nested in Request)
+    Participant:
+      type: object
+      properties:
+        object:
+          type: string
+          example: "participant"
+        requestId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        source:
+          type: string
+        permission:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    SingleParticipantResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Participant'
+
+    ParticipantListResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
+
+    # Request
+    Request:
+      type: object
+      properties:
+        object:
+          type: string
+          example: "request"
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        number:
+          type: string
+          nullable: true
+        payloadJson:
+          type: string
+        workflowId:
+          type: string
+          format: uuid
+          description: Required; every request belongs to a workflow.
+        entityId:
+          type: string
+          format: uuid
+          description: Required; every request belongs to an entity.
+        currentStepOrder:
+          type: integer
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/Step'
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
+        attachments:
+          $ref: '#/components/schemas/GroupedMedia'
+          description: |
+            Attachments grouped by collection name when populated; empty array `[]` when the request has no attachments.
+        status:
+          type: string
+          enum: [DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, CANCELLED]
+        createdByUserId:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Backfill date for requests created after the fact. When set, request uses this date for running number generation and display. Null for normal requests.
+        createdAt:
+          type: string
+          format: date-time
+        accessControl:
+          type: object
+          description: |
+            Flags for the current user's permissions on this request. Matches middleware
+            (can-view, can-approve/can-reject, is-approved for preview, is-creator for cancel/edit/delete, can-manage-participants).
+          properties:
+            canView:
+              type: boolean
+              description: User can view the request (creator or active participant)
+            canApprove:
+              type: boolean
+              description: User has ACTION permission and request is not yet approved; can submit approve
+            canReject:
+              type: boolean
+              description: User has ACTION permission; can submit reject
+            canPreview:
+              type: boolean
+              description: User can access summary preview (view + request fully approved)
+            canCancel:
+              type: boolean
+              description: User is creator and request is not cancelled
+            canEdit:
+              type: boolean
+              description: User is creator (DRAFT only)
+            canDelete:
+              type: boolean
+              description: User is creator
+            canManageParticipants:
+              type: boolean
+              description: User is creator or active participant (add/remove participants)
+
+    SingleRequestResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Request'
+
+    PaginatedRequestResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Request'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # Task
+    Task:
+      type: object
+      properties:
+        object:
+          type: string
+          example: "task"
+        id:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+        requestStepId:
+          type: string
+        assignedUserId:
+          type: string
+        status:
+          type: string
+        comment:
+          type: string
+          nullable: true
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        effectiveCompletedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Effective completion date for backfill requests (equals request.requestedAt). Null for normal requests.
+
+    SingleTaskResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Task'
+
+    # Action Log
+    ActionLog:
+      type: object
+      properties:
+        object:
+          type: string
+          example: "action_log"
+        id:
+          type: string
+          format: uuid
+        actorUserId:
+          type: string
+        action:
+          type: string
+          enum: [CREATE, UPDATE, DELETE, APPROVE, REJECT, CANCEL, SUBMIT, VIEW]
+        objectType:
+          type: string
+          enum: [request, task, user, workflow]
+        objectId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        actor:
+          $ref: '#/components/schemas/User'
+
+    PaginatedActionLogResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionLog'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    # Request Inputs
+    CreateRequestInput:
+      type: object
+      required:
+        - title
+        - payloadJson
+        - workflowId
+        - entityId
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        payloadJson:
+          type: string
+          minLength: 1
+        workflowId:
+          type: string
+          minLength: 1
+          description: Required. Workflow UUID (from GET /api/workflows).
+        entityId:
+          type: string
+          minLength: 1
+          description: Required. Entity UUID (from GET /api/entities).
+        steps:
+          type: array
+          items:
+            type: object
+            required: [name, actionType, approvalMode]
+            properties:
+              name:
+                type: string
+              actionType:
+                type: string
+                enum: [SIGN, APPROVE, REVIEW]
+              approvalMode:
+                type: string
+                enum: [ANY, ALL]
+              minApprovals:
+                type: integer
+        tasks:
+          type: array
+          items:
+            type: object
+            required: [stepOrder, assignedUserId]
+            properties:
+              stepOrder:
+                type: integer
+                minimum: 1
+              assignedUserId:
+                type: string
+        viewers:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          description: User IDs with view-only access
+        linkedRequests:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          description: Request IDs to link to this request
+        status:
+          type: string
+          enum: [DRAFT, SUBMITTED]
+        requestedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Backfill date for requests created after the fact. When set, request uses this date for running number generation and display. Must be a past date (strictly before today in app timezone) and not more than BACKFILL_MAX_DAYS days ago (default: 90)."
+      additionalProperties:
+        type: array
+        items:
+          type: string
+          format: binary
+        description: |
+          Dynamic attachment fields — the field name is the collection name (e.g. `invoices`, `receipts`).
+          Each field accepts an array of binary files.
+
+    UpdateRequestInput:
+      type: object
+      description: All fields optional. Send as multipart/form-data; JSON array fields (steps, tasks, participants, viewers, linkedRequests) as form string values.
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        payloadJson:
+          type: string
+          minLength: 1
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              stepOrder:
+                type: integer
+                minimum: 1
+              name:
+                type: string
+              actionType:
+                type: string
+                enum: [SIGN, APPROVE, REVIEW]
+              approvalMode:
+                type: string
+                enum: [ANY, ALL]
+              minApprovals:
+                type: integer
+        tasks:
+          type: array
+          items:
+            type: object
+            required: [stepOrder, assignedUserId]
+            properties:
+              id:
+                type: string
+                format: uuid
+              stepOrder:
+                type: integer
+                minimum: 1
+              assignedUserId:
+                type: string
+        participants:
+          type: array
+          items:
+            type: object
+            required: [userId, permission]
+            properties:
+              userId:
+                type: string
+              permission:
+                type: string
+                enum: [VIEW, EDIT, ACTION]
+        viewers:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        linkedRequests:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        requestedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Backfill date for requests created after the fact. Can only be set or changed while the request is in DRAFT status. Set to null to convert a backfill request back to a normal request. Must be a past date (strictly before today in app timezone) and not more than BACKFILL_MAX_DAYS days ago (default: 90)."
+      additionalProperties:
+        type: array
+        items:
+          type: string
+          format: binary
+        description: |
+          Dynamic attachment fields — the field name is the collection name (e.g. `invoices`, `receipts`).
+          Only the collections included in the upload are replaced; other collections are left untouched.
+
+    # Form
+    Form:
+      type: object
+      properties:
+        object:
+          type: string
+          example: "form"
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        payload:
+          type: object
+          description: Opaque JSON — frontend owns the structure
+        modelType:
+          type: string
+          enum: [Request, Comment, Workflow]
+          description: Polymorphic model type
+        modelId:
+          type: string
+          format: uuid
+          description: Polymorphic model ID (e.g. workflow UUID)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SingleFormResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Form'
+
+    FormListResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Form'
+
+    CreateFormInput:
+      type: object
+      required:
+        - name
+        - payload
+        - modelType
+        - modelId
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        payload:
+          type: object
+          description: Opaque JSON — frontend owns the structure
+        modelType:
+          type: string
+          enum: [Request, Comment, Workflow]
+          description: Polymorphic model type
+        modelId:
+          type: string
+          minLength: 1
+          description: Polymorphic model ID (e.g. workflow UUID)
+
+    UpdateFormInput:
+      type: object
+      description: All fields optional. Cannot change morph (modelType/modelId).
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+        payload:
+          type: object
+          description: Opaque JSON — frontend owns the structure
+
+    # Comment
+    CommentAuthor:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+
+    CommentMention:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+          format: email
+
+    CommentAttachment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        mimeType:
+          type: string
+        size:
+          type: integer
+          description: File size in bytes
+        url:
+          type: string
+          nullable: true
+          description: Pre-signed download URL (short-lived)
+
+    Comment:
+      type: object
+      properties:
+        object:
+          type: string
+          example: "comment"
+        id:
+          type: string
+          format: uuid
+        modelType:
+          type: string
+          example: "Request"
+        modelId:
+          type: string
+          format: uuid
+        author:
+          $ref: '#/components/schemas/CommentAuthor'
+        body:
+          type: string
+          maxLength: 1000
+        revisions:
+          type: array
+          nullable: true
+          description: Previous versions of the comment body (oldest first)
+          items:
+            type: object
+            properties:
+              body:
+                type: string
+              attachmentIds:
+                type: array
+                items:
+                  type: string
+              editedAt:
+                type: string
+                format: date-time
+        attachments:
+          type: object
+          description: File attachments grouped by collection name (currently always "commentAttachment")
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/CommentAttachment'
+        mentions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentMention'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SingleCommentResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Comment'
+
+    CommentListResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+
+    CreateCommentInput:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: Comment text. Use @user_{userId} to mention a user.
+        attachments[commentAttachment]:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: Up to 3 file attachments (PDF only). Multipart fieldname must be exactly "attachments[commentAttachment]".
+
+    UpdateCommentInput:
+      type: object
+      description: All fields optional. Send as multipart/form-data.
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: Updated comment text
+        removeMediaIds:
+          type: array
+          items:
+            type: string
+          description: IDs of existing attachments to hard-delete
+        attachments[commentAttachment]:
+          type: array
+          items:
+            type: string
+            format: binary
+          description: New file attachments to add (up to 3 total after removes). Multipart fieldname must be exactly "attachments[commentAttachment]".
