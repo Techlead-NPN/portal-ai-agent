@@ -9,6 +9,22 @@ description: Determine approval chains for DOA/AOA requests using process type, 
 
 Resolve approvers and sequence from the DOA/AOA policy using deterministic rules.
 
+## Source Document
+
+The encoded rule set below is derived from the official DOA/AOA PDF. To verify a rule, quote a clause, or resolve an ambiguous case against the source, use the `doa-source-reader` skill (location is configured via `DOA_SOURCE_PATH` in `.env.local`).
+
+## Versioned Rule Tables
+
+Per-version source-derived rule matrices live alongside this skill in `rules/`, named to mirror the PDF filename. Resolution order:
+
+1. Read `DOA_SOURCE_PATH` → strip extension → look for matching `.md` in `rules/`.
+2. If found, that file is the **authoritative encoded matrix** for the active DOA version. The hardcoded rule set in this SKILL.md below is a fallback / quick-reference only.
+3. If not found, this means the source PDF has been bumped to a new version. Use `doa-source-reader` to generate a new versioned rules file before applying rules.
+
+Current versioned files:
+
+- `rules/TL_Delegation_of_Authority_V1.1_27-02-2026_Execution.md` (V1.1, effective 2026-02-27, sha256 `e4429a1c...`)
+
 ## Core definitions
 
 - `A(F)`: Final approver (must approve last).
@@ -37,7 +53,7 @@ If required inputs are missing, ask a concise clarification before deciding.
 5. If the task is to create/update a request in Portal:
    - Build `steps` and `tasks` from `required_approvers`.
    - Create one `APPROVE` step per approver in sequence (`stepOrder` ascending).
-   - Create one task per step with `assignedUserId` from user lookup.
+   - Resolve each approver role to `assignedUserId` via the `portal-user-directory` skill (do not guess IDs).
    - Use `steps` + `tasks` in `requests-create` or `requests-update` while DRAFT.
    - Do not use `requests-add-participant` for approver assignment.
 6. Return:

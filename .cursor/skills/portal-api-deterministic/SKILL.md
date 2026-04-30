@@ -18,10 +18,17 @@ Preferred:
 - `.env.local` with:
   - `API_BASE_URL=...`
   - `API_BEARER_TOKEN=Bearer ...`
+  - `API_SPEC_PATH=...` (local file path or HTTP(S) URL to the OpenAPI spec; defaults to `./api-spec.yaml`)
 
 Fallback:
 - `endpoint.txt`
 - `jwt.txt`
+
+## Spec lookup
+
+Use `API_SPEC_PATH` when you need to inspect the OpenAPI definition:
+- Local path (e.g. `./api-spec.yaml`): read the file directly.
+- HTTP(S) URL (e.g. `https://uat-portal.api.techleadnpn.co.th/api-spec.yaml`): fetch with curl using the same auth headers as `api.sh` if the host requires it.
 
 ## Execute
 
@@ -87,6 +94,7 @@ BODY="$(jq -nc --arg email "demo@example.com" --arg password "secret" '{email:$e
 - `forms-list` -> `GET /api/forms`
 - `forms-create` -> `POST /api/forms` (optional `BODY`)
 - `test-run` -> `POST /api/test` (optional `BODY`)
+- `spec-fetch` -> prints the OpenAPI spec from `API_SPEC_PATH` (local file or HTTP(S) URL)
 
 ## Determinism Notes
 

@@ -14,6 +14,7 @@ load_config() {
 
   API_BASE_URL="${API_BASE_URL:-}"
   API_BEARER_TOKEN="${API_BEARER_TOKEN:-}"
+  API_SPEC_PATH="${API_SPEC_PATH:-./api-spec.yaml}"
 
   if [[ -z "${API_BASE_URL}" && -f "${ENDPOINT_FILE}" ]]; then
     API_BASE_URL="$(<"${ENDPOINT_FILE}")"
@@ -24,6 +25,36 @@ load_config() {
   fi
 
   API_BASE_URL="${API_BASE_URL%/}"
+}
+
+resolve_spec_path() {
+  local raw="${API_SPEC_PATH}"
+  case "${raw}" in
+    /*|http://*|https://*) echo "${raw}" ;;
+    *) echo "${ROOT_DIR}/${raw#./}" ;;
+  esac
+}
+
+spec_fetch() {
+  local target
+  target="$(resolve_spec_path)"
+  echo "=== SPEC ==="
+  echo "source: ${target}"
+  echo "=== CONTENT ==="
+  case "${target}" in
+    http://*|https://*)
+      curl -fsS --connect-timeout 10 --max-time 60 \
+        -H "Accept: application/yaml, application/json, text/plain, */*" \
+        "${target}"
+      ;;
+    *)
+      if [[ ! -f "${target}" ]]; then
+        echo "Spec file not found: ${target}" >&2
+        exit 1
+      fi
+      cat "${target}"
+      ;;
+  esac
 }
 
 require_var() {
@@ -137,6 +168,7 @@ Examples:
   bash .cursor/skills/portal-api-deterministic/scripts/api.sh users-list
   REQUEST_ID=req_123 bash .cursor/skills/portal-api-deterministic/scripts/api.sh requests-get
   BODY='{"foo":"bar"}' bash .cursor/skills/portal-api-deterministic/scripts/api.sh forms-create
+  bash .cursor/skills/portal-api-deterministic/scripts/api.sh spec-fetch
 EOF
 }
 
@@ -148,6 +180,12 @@ main() {
   fi
 
   load_config
+
+  if [[ "${command}" == "spec-fetch" ]]; then
+    spec_fetch
+    return
+  fi
+
   require_var "${API_BASE_URL}" "API_BASE_URL (.env.local or endpoint.txt)"
   require_var "${API_BEARER_TOKEN}" "API_BEARER_TOKEN (.env.local or jwt.txt)"
 
