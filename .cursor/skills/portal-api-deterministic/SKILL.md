@@ -166,3 +166,21 @@ curl -sS -i -X PUT "$API_BASE_URL/api/requests/$REQUEST_ID" \
   -H "Accept: application/json" \
   -F "requestAttachment=@/absolute/path/to/file.pdf;type=application/pdf"
 ```
+
+### Memory: Clone a form payload between workflows
+- Trigger: user asks to make workflow B's form "the same as" workflow A's form.
+- Do: resolve both workflows via `workflows-list` (match on `displayName`/`alias`, since several workflows share `name`), map each to its form via `forms-list`, back up the target form JSON under `storage/backups/`, then
+  `BODY="$(jq -c '{name: .name, payload: .payload}' src.json)" FORM_ID=<targetFormId> ... form-update`.
+- Avoid: sending `description`, `modelType`, or `modelId` — `PUT /api/forms/{id}` is a partial update and cannot change the morph; omitting `description` preserves the target's own wording.
+- Proof: `HTTP/2 200`; re-fetching the target showed `{name, payload}` byte-identical to the source with `description` unchanged.
+- Known pair: `Payment Request (PAY)` = `workflow_dCsaHdQmICWQx1NUXnOy3Bth` / `form_L30O0hYIiLjYtuBMTq053atH`; `Payment Request (Procurement)` (alias `PAYR`) = `workflow_jwGFQ4LqwKayHWACcVZ2FKgl` / `form_4ACezPtOwTNwzcS5q0d1Zvxo`.
+
+### Memory: Clone a form payload from UAT to Prod
+- Trigger: user asks to update a Prod workflow's form with the UAT version.
+- Prod config lives in `.env.production.local` as `API_BASE_URL_PRODUCTION` / `API_BEARER_TOKEN_PRODUCTION` (`https://portal.api.techleadnpn.co.th`). `api.sh` cannot reach Prod — it sources `.env.local` last, so exported overrides are clobbered. Use a separate caller.
+- Do **not** `source .env.production.local`: `API_BEARER_TOKEN_PRODUCTION=Bearer eyJ...` is unquoted, so bash splits on the space and tries to run the JWT as a command. Parse with
+  `grep -m1 '^API_BEARER_TOKEN_PRODUCTION=' "$ENVF" | cut -d= -f2-`.
+- Flow: resolve the workflow in each env via `GET /api/workflows` (match on `alias`), map to its form via `GET /api/forms` (match `modelId`), back up the Prod form's `.data` under `storage/backups/`, diff the schemas, then `PUT /api/forms/{prodFormId}` with `jq -c '{name, payload}'` from the UAT form.
+- Always diff `.payload.rjsf.schema.properties` before writing and surface dropped/added fields — envs drift and the UAT form can be a *reduction* of Prod. Confirm with the user before overwriting Prod.
+- Proof (2026-07-21): Prod `Payment Request` / `workflow_ZTL130zDILiLigGeCKpSK34X` / `form_9bHz7Z0xGqfMGpD9KOiIkF4p` updated from UAT `form_L30O0hYIiLjYtuBMTq053atH`; re-fetch showed `{name, payload}` byte-identical, `modelId` and `description` preserved. Overwrite dropped `account_code`, `expense_category`, `responsible_department` and added `due_date`.
+- Note: that Prod form's `description` reads `"Petty Cash Request form"` — stale/wrong, but preserved since partial update omits `description`.
