@@ -1,0 +1,259 @@
+{
+  "description": "Payment Request (PAY) form",
+  "modelId": "workflow_dCsaHdQmICWQx1NUXnOy3Bth",
+  "modelType": "Workflow",
+  "name": "pay-form@v1",
+  "object": "form",
+  "payload": {
+    "attachments": {},
+    "budget": {
+      "required": false
+    },
+    "rjsf": {
+      "formData": {
+        "line_items": [
+          {}
+        ]
+      },
+      "schema": {
+        "properties": {
+          "currency": {
+            "enum": [
+              "THB",
+              "USD",
+              "GBP",
+              "EUR",
+              "JPY",
+              "SGD",
+              "CNY"
+            ],
+            "title": "สกุลเงิน",
+            "type": "string"
+          },
+          "line_items": {
+            "items": {
+              "properties": {
+                "amount": {
+                  "title": "Amount",
+                  "type": "number"
+                },
+                "description": {
+                  "title": "Description",
+                  "type": "string"
+                },
+                "isvat": {
+                  "enum": [
+                    "Yes",
+                    "No"
+                  ],
+                  "title": "isVAT",
+                  "type": "string"
+                },
+                "total_amount_vat": {
+                  "readOnly": true,
+                  "title": "Total Amount (Included Vat)",
+                  "type": "number"
+                },
+                "vat_7": {
+                  "readOnly": true,
+                  "title": "VAT 7%",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "description",
+                "amount"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "title": "Line Items",
+            "type": "array"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "recipient_name": {
+            "title": "Recipient Name",
+            "type": "string"
+          },
+          "transfer_account_no": {
+            "title": "Bank Account No.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose",
+          "recipient_name",
+          "line_items",
+          "transfer_account_no"
+        ],
+        "type": "object"
+      },
+      "uiSchema": {
+        "currency": {
+          "ui:placeholder": "กรุณาเลือก"
+        },
+        "line_items": {
+          "items": {
+            "total_amount_vat": {
+              "ui:options": {
+                "compute": "amount + vat_7"
+              },
+              "ui:readonly": true,
+              "ui:widget": "hidden"
+            },
+            "ui:field": "LayoutGridField",
+            "ui:layoutGrid": {
+              "ui:row": {
+                "children": [
+                  {
+                    "ui:columns": {
+                      "children": [
+                        "description",
+                        "amount",
+                        "isvat",
+                        "vat_7"
+                      ],
+                      "style": {
+                        "minWidth": 0
+                      }
+                    }
+                  }
+                ],
+                "style": {
+                  "columnGap": "0.5rem",
+                  "gridTemplateColumns": "2fr 1fr minmax(0, 1fr) 1fr",
+                  "rowGap": "0.5rem"
+                }
+              }
+            },
+            "vat_7": {
+              "ui:options": {
+                "compute": "if(isvat == \"Yes\", roundTo(amount * 0.07, 2), 0)"
+              },
+              "ui:readonly": true
+            }
+          },
+          "ui:options": {
+            "arrayFooter": {
+              "aggregates": [
+                {
+                  "agg": "sum",
+                  "key": "amount",
+                  "label": "Amount"
+                },
+                {
+                  "agg": "sum",
+                  "key": "vat_7"
+                },
+                {
+                  "agg": "sum",
+                  "key": "total_amount_vat",
+                  "label": "Total Amount"
+                }
+              ]
+            }
+          }
+        },
+        "purpose": {
+          "ui:widget": "textarea"
+        },
+        "transfer_account_no": {
+          "ui:placeholder": "e.g. SCB 093-4635924, PromptPay 099-999-9999"
+        },
+        "ui:field": "LayoutGridField",
+        "ui:layoutGrid": {
+          "ui:row": {
+            "children": [
+              {
+                "ui:row": {
+                  "children": [
+                    {
+                      "ui:col": {
+                        "children": [
+                          "purpose"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]",
+                        "style": {
+                          "--section-col-span": "1 / -1",
+                          "minWidth": 0
+                        }
+                      }
+                    },
+                    {
+                      "ui:col": {
+                        "children": [
+                          "recipient_name"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]",
+                        "style": {
+                          "--section-col-span": "1 / -1",
+                          "minWidth": 0
+                        }
+                      }
+                    },
+                    {
+                      "ui:col": {
+                        "children": [
+                          "transfer_account_no"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]",
+                        "style": {
+                          "--section-col-span": "1 / -1",
+                          "minWidth": 0
+                        }
+                      }
+                    },
+                    {
+                      "ui:col": {
+                        "children": [
+                          "currency"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]",
+                        "style": {
+                          "--section-col-span": "1 / -1",
+                          "minWidth": 0
+                        }
+                      }
+                    },
+                    {
+                      "ui:col": {
+                        "children": [
+                          "line_items"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]",
+                        "style": {
+                          "--section-col-span": "1 / -1",
+                          "minWidth": 0
+                        }
+                      }
+                    }
+                  ],
+                  "className": "[grid-template-columns:minmax(0,_1fr)] md:[grid-template-columns:var(--section-grid-columns)]",
+                  "style": {
+                    "--section-grid-columns": "repeat(1, minmax(0, 1fr))",
+                    "columnGap": "0.75rem",
+                    "rowGap": "0.75rem"
+                  }
+                }
+              }
+            ],
+            "style": {
+              "gridTemplateColumns": "minmax(0, 1fr)",
+              "rowGap": "1rem"
+            }
+          }
+        },
+        "ui:order": [
+          "purpose",
+          "recipient_name",
+          "transfer_account_no",
+          "currency",
+          "line_items"
+        ]
+      }
+    }
+  }
+}

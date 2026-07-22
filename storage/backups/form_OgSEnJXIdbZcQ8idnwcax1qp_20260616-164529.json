@@ -1,0 +1,303 @@
+{
+  "object": "form",
+  "id": "form_OgSEnJXIdbZcQ8idnwcax1qp",
+  "name": "PR-EAP Form v4 (TH)",
+  "description": "แบบฟอร์มใบขอซื้อ (PR-EAP) ภาษาไทย",
+  "payload": {
+    "rjsf": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "budget_account_no",
+          "department",
+          "phone_number",
+          "required_date",
+          "delivery_location",
+          "sole_source",
+          "work_type",
+          "recommended_vendors",
+          "line_items",
+          "total_expense",
+          "currency"
+        ],
+        "properties": {
+          "currency": {
+            "enum": [
+              "THB",
+              "USD",
+              "GBP",
+              "EUR",
+              "JPY",
+              "SGD",
+              "CNY"
+            ],
+            "type": "string",
+            "title": "สกุลเงิน",
+            "default": "THB"
+          },
+          "work_type": {
+            "enum": [
+              "งานซื้อของ",
+              "งานจ้างบริการ"
+            ],
+            "type": "string",
+            "title": "ประเภทของงาน"
+          },
+          "department": {
+            "enum": [
+              "Technology",
+              "President Office",
+              "People & Administration",
+              "Legal & Compliance",
+              "Company Secretary & IA",
+              "Accounting & Finance",
+              "Marketing",
+              "Procurement",
+              "Operations"
+            ],
+            "type": "string",
+            "title": "Department"
+          },
+          "has_budget": {
+            "type": "boolean",
+            "title": "งบประมาณ",
+            "default": false
+          },
+          "line_items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "description",
+                "quantity",
+                "unit_price",
+                "amount"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "number",
+                  "title": "จำนวนเงิน"
+                },
+                "quantity": {
+                  "type": "number",
+                  "title": "จำนวน"
+                },
+                "unit_price": {
+                  "type": "number",
+                  "title": "ราคาต่อหน่วย"
+                },
+                "description": {
+                  "type": "string",
+                  "title": "รายการ"
+                }
+              }
+            },
+            "title": "รายการ",
+            "minItems": 1
+          },
+          "sole_source": {
+            "type": "boolean",
+            "title": "Sole Source",
+            "default": false
+          },
+          "phone_number": {
+            "type": "string",
+            "title": "เบอร์โทรศัพท์"
+          },
+          "required_date": {
+            "type": "string",
+            "title": "วันที่ต้องการใช้",
+            "format": "date"
+          },
+          "total_expense": {
+            "type": "number",
+            "title": "รวมค่าใช้จ่ายทั้งสิ้น",
+            "minimum": 0
+          },
+          "budget_account_no": {
+            "type": "string",
+            "title": "Budget Account No."
+          },
+          "delivery_location": {
+            "type": "string",
+            "title": "สถานที่จัดส่งสินค้า"
+          },
+          "recommended_vendors": {
+            "type": "string",
+            "title": "ชื่อผู้ขายที่แนะนำ"
+          }
+        },
+        "dependencies": {
+          "has_budget": {
+            "oneOf": [
+              {
+                "required": [
+                  "budget_reason"
+                ],
+                "properties": {
+                  "has_budget": {
+                    "const": true
+                  },
+                  "budget_amount": {
+                    "type": "number",
+                    "title": "จำนวนงบประมาณที่เหลือ",
+                    "minimum": 0
+                  },
+                  "budget_reason": {
+                    "type": "string",
+                    "title": "เหตุผลในการขอใช้งบประมาณ"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "has_budget": {
+                    "const": false
+                  }
+                }
+              }
+            ]
+          },
+          "sole_source": {
+            "oneOf": [
+              {
+                "required": [
+                  "sole_source_explanation"
+                ],
+                "properties": {
+                  "sole_source": {
+                    "const": true
+                  },
+                  "sole_source_explanation": {
+                    "type": "string",
+                    "title": "Explanation"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "sole_source": {
+                    "const": false
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "formData": {
+        "currency": "THB",
+        "has_budget": false,
+        "line_items": [
+          {}
+        ],
+        "sole_source": false
+      },
+      "uiSchema": {
+        "currency": {
+          "ui:placeholder": "กรุณาเลือก"
+        },
+        "ui:order": [
+          "budget_account_no",
+          "department",
+          "phone_number",
+          "required_date",
+          "delivery_location",
+          "sole_source",
+          "sole_source_explanation",
+          "work_type",
+          "recommended_vendors",
+          "currency",
+          "has_budget",
+          "budget_amount",
+          "budget_reason",
+          "line_items",
+          "total_expense"
+        ],
+        "work_type": {
+          "ui:placeholder": "กรุณาเลือก"
+        },
+        "department": {
+          "ui:placeholder": "กรุณาเลือก"
+        },
+        "has_budget": {
+          "ui:widget": "radio"
+        },
+        "line_items": {
+          "items": {
+            "amount": {
+              "ui:options": {
+                "currencyField": "currency"
+              }
+            },
+            "quantity": {
+              "ui:options": {
+                "useGrouping": true,
+                "thousandSeparator": true
+              }
+            },
+            "ui:field": "LayoutGridField",
+            "unit_price": {
+              "ui:options": {
+                "currencyField": "currency"
+              }
+            },
+            "ui:layoutGrid": {
+              "ui:row": {
+                "style": {
+                  "rowGap": "0.5rem",
+                  "columnGap": "0.5rem",
+                  "gridTemplateColumns": "3fr 1fr 1fr 1fr"
+                },
+                "children": [
+                  {
+                    "ui:columns": {
+                      "style": {
+                        "minWidth": 0
+                      },
+                      "children": [
+                        "description",
+                        "quantity",
+                        "unit_price",
+                        "amount"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "sole_source": {
+          "ui:widget": "radio"
+        },
+        "total_expense": {
+          "ui:options": {
+            "useGrouping": true,
+            "thousandSeparator": true
+          }
+        },
+        "delivery_location": {
+          "ui:widget": "textarea"
+        },
+        "recommended_vendors": {
+          "ui:widget": "textarea"
+        },
+        "sole_source_explanation": {
+          "ui:widget": "textarea",
+          "ui:placeholder": "กรุณาระบุเหตุผล"
+        }
+      }
+    },
+    "attachments": {
+      "quotation": {
+        "title": "Quotation",
+        "required": false
+      }
+    }
+  },
+  "modelType": "Workflow",
+  "modelId": "workflow_7qr8sQEX3IIeyPbgYJ6uYGmi",
+  "createdAt": "2026-04-26T16:19:37.087Z",
+  "updatedAt": "2026-05-28T05:07:54.244Z"
+}

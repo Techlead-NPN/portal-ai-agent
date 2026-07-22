@@ -1,0 +1,372 @@
+{
+  "object": "form",
+  "id": "form_uNrzge4T76DKYMBWSXzLk0On",
+  "name": "rmb-form@v1",
+  "description": "Petty Cash Request form",
+  "payload": {
+    "rjsf": {
+      "schema": {
+        "type": "object",
+        "required": [
+          "purpose",
+          "recipient_name",
+          "expense_category",
+          "line_items",
+          "account_code",
+          "transfer_account_no",
+          "responsible_department"
+        ],
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "title": "Purpose"
+          },
+          "line_items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "description",
+                "amount",
+                "wht_types"
+              ],
+              "properties": {
+                "net": {
+                  "type": "number",
+                  "title": "Net",
+                  "readOnly": true
+                },
+                "wht": {
+                  "type": "number",
+                  "title": "WHT",
+                  "readOnly": true
+                },
+                "isvat": {
+                  "enum": [
+                    "Yes",
+                    "No"
+                  ],
+                  "type": "string",
+                  "title": "isVAT"
+                },
+                "vat_7": {
+                  "type": "number",
+                  "title": "VAT 7%",
+                  "readOnly": true
+                },
+                "amount": {
+                  "type": "number",
+                  "title": "Amount"
+                },
+                "wht_types": {
+                  "enum": [
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                    "5"
+                  ],
+                  "type": "string",
+                  "title": "WHT Types"
+                },
+                "description": {
+                  "type": "string",
+                  "title": "Description"
+                },
+                "total_amount_vat": {
+                  "type": "number",
+                  "title": "Total Amount (Included Vat)",
+                  "readOnly": true
+                }
+              }
+            },
+            "title": "Line Items",
+            "minItems": 1
+          },
+          "account_code": {
+            "type": "string",
+            "title": "Account Code"
+          },
+          "recipient_name": {
+            "type": "string",
+            "title": "Recipient Name"
+          },
+          "expense_category": {
+            "enum": [
+              "ค่าอาหารสำหรับการประชุม",
+              "ค่าถ่ายสำเนาเอกสาร",
+              "ค่าขอหนังสือรับรองบริษัท",
+              "ค่าโทรศัพท์",
+              "ค่าธรรมเนียมธนาคาร",
+              "ค่าธรรมเนียมอื่น/ค่าอากร",
+              "ค่าไปรษณีย์/แสตมป์",
+              "ค่าสิ่งพิมพ์/หนังสือพิมพ์",
+              "ค่าเดินทาง/ค่าโดยสารรถ",
+              "ค่าน้ำมันรถ",
+              "ค่าใช้จ่ายอื่น",
+              "เบิกในงบประมาณ Supplies Expenses"
+            ],
+            "type": "string",
+            "title": "Expense Category"
+          },
+          "transfer_account_no": {
+            "type": "string",
+            "title": "Bank Account No."
+          },
+          "responsible_department": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "Technology",
+                "President Office",
+                "People & Administration",
+                "Legal & Compliance",
+                "Company Secretary & IA",
+                "Accounting & Finance",
+                "Marketing",
+                "Procurement",
+                "Operations"
+              ],
+              "type": "string"
+            },
+            "title": "ฝ่ายที่รับผิดชอบ (Responsible Department)",
+            "uniqueItems": true
+          }
+        }
+      },
+      "formData": {
+        "line_items": [
+          {}
+        ],
+        "responsible_department": []
+      },
+      "uiSchema": {
+        "purpose": {
+          "ui:widget": "textarea"
+        },
+        "ui:field": "LayoutGridField",
+        "ui:order": [
+          "purpose",
+          "recipient_name",
+          "expense_category",
+          "line_items",
+          "account_code",
+          "transfer_account_no",
+          "responsible_department"
+        ],
+        "line_items": {
+          "items": {
+            "net": {
+              "ui:widget": "hidden",
+              "ui:options": {
+                "compute": "amount + vat_7 - wht"
+              },
+              "ui:readonly": true
+            },
+            "wht": {
+              "ui:options": {
+                "compute": "roundTo(amount * (0.01 * wht_types), 2)"
+              },
+              "ui:readonly": true
+            },
+            "vat_7": {
+              "ui:options": {
+                "compute": "if(isvat == \"Yes\", roundTo(amount * 0.07, 2), 0)"
+              },
+              "ui:readonly": true
+            },
+            "ui:field": "LayoutGridField",
+            "ui:layoutGrid": {
+              "ui:row": {
+                "style": {
+                  "rowGap": "0.5rem",
+                  "columnGap": "0.5rem",
+                  "gridTemplateColumns": "2fr 1fr minmax(0, 1fr) 1fr minmax(0, 1fr) minmax(0, 1fr)"
+                },
+                "children": [
+                  {
+                    "ui:columns": {
+                      "style": {
+                        "minWidth": 0
+                      },
+                      "children": [
+                        "description",
+                        "amount",
+                        "isvat",
+                        "vat_7",
+                        "wht_types",
+                        "wht"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            "total_amount_vat": {
+              "ui:widget": "hidden",
+              "ui:options": {
+                "compute": "amount + vat_7"
+              },
+              "ui:readonly": true
+            }
+          },
+          "ui:options": {
+            "arrayFooter": {
+              "aggregates": [
+                {
+                  "agg": "sum",
+                  "key": "amount",
+                  "label": "Amount"
+                },
+                {
+                  "agg": "sum",
+                  "key": "vat_7"
+                },
+                {
+                  "agg": "sum",
+                  "key": "total_amount_vat",
+                  "label": "Total Amount"
+                },
+                {
+                  "agg": "sum",
+                  "key": "wht",
+                  "label": "Withholding Tax"
+                },
+                {
+                  "agg": "sum",
+                  "key": "net"
+                }
+              ]
+            }
+          }
+        },
+        "account_code": {
+          "ui:placeholder": "e.g. 62050400"
+        },
+        "ui:layoutGrid": {
+          "ui:row": {
+            "style": {
+              "rowGap": "1rem",
+              "gridTemplateColumns": "minmax(0, 1fr)"
+            },
+            "children": [
+              {
+                "ui:row": {
+                  "style": {
+                    "rowGap": "0.75rem",
+                    "columnGap": "0.75rem",
+                    "--section-grid-columns": "repeat(1, minmax(0, 1fr))"
+                  },
+                  "children": [
+                    {
+                      "ui:col": {
+                        "style": {
+                          "minWidth": 0,
+                          "--section-col-span": "1 / -1"
+                        },
+                        "children": [
+                          "purpose"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]"
+                      }
+                    },
+                    {
+                      "ui:col": {
+                        "style": {
+                          "minWidth": 0,
+                          "--section-col-span": "1 / -1"
+                        },
+                        "children": [
+                          "recipient_name"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]"
+                      }
+                    },
+                    {
+                      "ui:col": {
+                        "style": {
+                          "minWidth": 0,
+                          "--section-col-span": "1 / -1"
+                        },
+                        "children": [
+                          "expense_category"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]"
+                      }
+                    },
+                    {
+                      "ui:col": {
+                        "style": {
+                          "minWidth": 0,
+                          "--section-col-span": "1 / -1"
+                        },
+                        "children": [
+                          "line_items"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]"
+                      }
+                    },
+                    {
+                      "ui:col": {
+                        "style": {
+                          "minWidth": 0,
+                          "--section-col-span": "1 / -1"
+                        },
+                        "children": [
+                          "account_code"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]"
+                      }
+                    },
+                    {
+                      "ui:col": {
+                        "style": {
+                          "minWidth": 0,
+                          "--section-col-span": "1 / -1"
+                        },
+                        "children": [
+                          "transfer_account_no"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]"
+                      }
+                    },
+                    {
+                      "ui:col": {
+                        "style": {
+                          "minWidth": 0,
+                          "--section-col-span": "1 / -1"
+                        },
+                        "children": [
+                          "responsible_department"
+                        ],
+                        "className": "[grid-column:1_/_-1] md:[grid-column:var(--section-col-span)]"
+                      }
+                    }
+                  ],
+                  "className": "[grid-template-columns:minmax(0,_1fr)] md:[grid-template-columns:var(--section-grid-columns)]"
+                }
+              }
+            ]
+          }
+        },
+        "expense_category": {
+          "ui:widget": "select"
+        },
+        "transfer_account_no": {
+          "ui:placeholder": "e.g. SCB 093-4635924, PromptPay 099-999-9999"
+        },
+        "responsible_department": {
+          "ui:widget": "select"
+        }
+      }
+    },
+    "budget": {
+      "required": false
+    },
+    "attachments": {}
+  },
+  "modelType": "Workflow",
+  "modelId": "workflow_bGUyCVj2JjndhBNMth1DJzhq",
+  "createdAt": "2026-06-12T10:49:22.767Z",
+  "updatedAt": "2026-06-12T10:49:22.767Z"
+}
