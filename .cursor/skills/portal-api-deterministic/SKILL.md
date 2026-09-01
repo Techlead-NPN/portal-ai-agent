@@ -184,3 +184,11 @@ curl -sS -i -X PUT "$API_BASE_URL/api/requests/$REQUEST_ID" \
 - Always diff `.payload.rjsf.schema.properties` before writing and surface dropped/added fields — envs drift and the UAT form can be a *reduction* of Prod. Confirm with the user before overwriting Prod.
 - Proof (2026-07-21): Prod `Payment Request` / `workflow_ZTL130zDILiLigGeCKpSK34X` / `form_9bHz7Z0xGqfMGpD9KOiIkF4p` updated from UAT `form_L30O0hYIiLjYtuBMTq053atH`; re-fetch showed `{name, payload}` byte-identical, `modelId` and `description` preserved. Overwrite dropped `account_code`, `expense_category`, `responsible_department` and added `due_date`.
 - Note: that Prod form's `description` reads `"Petty Cash Request form"` — stale/wrong, but preserved since partial update omits `description`.
+
+### Memory: Clone a form payload from Prod to UAT (reverse direction)
+- Trigger: user asks to update a UAT workflow's form with the Prod version.
+- Same mechanics as the UAT→Prod memory above, just swapped: read the source with the Prod caller, `PUT /api/forms/{uatFormId}` through `api.sh form-update` with `BODY="$(jq -c '{name, payload}' prod.json)"`.
+- Do **not** match workflows on `alias` across envs — aliases drift. PR-EAP is `PR(EAP)` in Prod but `preap` in UAT. Match on `name`/`displayName`, then map to forms via `modelId`.
+- A UAT workflow can have **more than one form attached**; `GET /api/workflows` returns a `forms[]` array per workflow. When it has several, list id/createdAt/updatedAt and ask the user which to overwrite rather than guessing.
+- Proof (2026-08-17): UAT `Purchase Request (PR-EAP)` / `workflow_cSfs10qFi6LvXTMHh6HdQ3Xh` / `form_R4bixn8JED43SYcEtIQZXs79` updated from Prod `form_OgSEnJXIdbZcQ8idnwcax1qp` (`workflow_7qr8sQEX3IIeyPbgYJ6uYGmi`). `HTTP/2 200`; re-fetch showed `{name, payload}` byte-identical, `modelId`/`description` preserved. Overwrite dropped `total_expense`, added `isvat`, dropped `currency.default: "THB"`, and made `line_items[].amount` a computed read-only required field.
+- Known duplicate: UAT workflow `workflow_cSfs10qFi6LvXTMHh6HdQ3Xh` has a second attached form `form_jM6MXlv1x5fKcrOq3doU0L28` (same name, missing `payload.budget`) that was left untouched.

@@ -2,3 +2,4 @@
 .env.production.local
 jwt.txt
 endpoint.txt
+storage/backups/
